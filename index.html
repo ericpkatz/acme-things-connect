@@ -1,0 +1,131 @@
+<html>
+  <head>
+<style>
+</style>
+    <script src='https://cdnjs.cloudflare.com/ajax/libs/axios/0.18.0/axios.js'></script>
+    <script src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
+    <script src="https://unpkg.com/react@16/umd/react.development.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@16/umd/react-dom.development.js" crossorigin></script>
+    <script src='https://cdnjs.cloudflare.com/ajax/libs/react-router-dom/5.0.0/react-router-dom.js'></script>
+    <script src='https://cdnjs.cloudflare.com/ajax/libs/redux/4.0.1/redux.js'></script>
+    <script src='https://cdnjs.cloudflare.com/ajax/libs/react-redux/7.1.0/react-redux.js'></script>
+  </head>
+  <body>
+    <div id='root'></div>
+    <script type='text/babel'>
+      const { HashRouter, Link, Route } = ReactRouterDOM;
+      const { Provider, connect } = ReactRedux;
+      
+      const store = Redux.createStore(( state = [], action)=> {
+        switch(action.type){
+          case 'SET_THINGS':
+            state = action.things;
+            break;
+          case 'CREATE_THING':
+            state = [...state, action.thing];
+            break;
+          case 'DESTROY_THING':
+            state = state.filter( thing => action.thing.id !== thing.id);
+        }
+        return state;
+      });
+
+      const start = async()=> {
+        const response = await axios.get('/api/things');
+        store.dispatch({ type: 'SET_THINGS', things: response.data });
+      };
+
+      start();
+
+      const _Nav = ({ location, things})=> {
+          const { pathname } = location;
+          return (
+            <div>
+              <Link to='/' style={{ fontWeight: pathname === '/' ? 'bold': ''}}>Home</Link>
+              { ' ' }
+              <Link to='/things' style={{ fontWeight: pathname === '/things' ? 'bold': ''}}>Things ({ things.length })</Link>
+            </div>
+          );
+      }
+
+      const Nav = connect((state)=> {
+        return {
+          things: state
+        };
+      })(_Nav);
+
+      const _Things = ({ things, destroy })=> {
+        return (
+          <ul>
+            {
+              things.map( thing => <li onClick={ ()=> destroy(thing) } key={ thing.id }>{ thing.name }</li>)
+            }
+          </ul>
+        );
+      }
+
+      const Things = connect((state)=> {
+        return {
+          things: state
+        };
+      }, (dispatch)=> {
+        return {
+          destroy : async(thing)=> {
+            await axios.delete(`/api/things/${thing.id}`);
+            dispatch({
+              type: 'DESTROY_THING',
+              thing
+            });
+          }
+        };
+
+      })(_Things)
+
+
+      const _Home = ( { count, createThing, canCreate })=> {
+      /*
+        const createThing = async()=> {
+          const response = await axios.post('/api/things');
+          store.dispatch({ type: 'CREATE_THING', thing: response.data });
+        };
+        */
+        return (
+          <div>
+            You have { count } things. Add Another!
+            {
+              canCreate && <button onClick={ createThing }>Create New Thing</button>
+            }
+          </div>
+        );
+      }
+
+      const Home = connect((state)=> {
+        return {
+          count: state.length,
+          canCreate: state.length <= 20
+        };
+      }, (dispatch)=> {
+        return {
+          createThing: async()=> {
+            const response = await axios.post('/api/things');
+            dispatch({ type: 'CREATE_THING', thing: response.data });
+          }
+        }
+      })(_Home);
+
+      const App = ()=> {
+        return (
+          <Provider store={ store }>
+            <HashRouter>
+              <Route component={ Nav } />
+              <Route path='/' exact component={ Home } />
+              <Route path='/things' component={ Things } />
+            </HashRouter>
+          </Provider>
+        );
+      };
+      const root = document.querySelector('#root');
+      ReactDOM.render(<App />, root);
+    </script>
+  </body>
+</html>
