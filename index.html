@@ -9,33 +9,73 @@
     <script src='https://cdnjs.cloudflare.com/ajax/libs/react-router-dom/5.0.0/react-router-dom.js'></script>
     <script src='https://cdnjs.cloudflare.com/ajax/libs/redux/4.0.1/redux.js'></script>
     <script src='https://cdnjs.cloudflare.com/ajax/libs/react-redux/7.1.0/react-redux.js'></script>
+    <script src='https://cdnjs.cloudflare.com/ajax/libs/redux-thunk/2.3.0/redux-thunk.js'></script>
   </head>
   <body>
     <div id='root'></div>
     <script type='text/babel'>
+      const DESTROY_THING = 'DELETE_THING';
+      const CREATE_THING = 'CREATE_THING';
+      const SET_THINGS = 'SET_THINGS';
+
       const { HashRouter, Link, Route } = ReactRouterDOM;
       const { Provider, connect } = ReactRedux;
       
       const store = Redux.createStore(( state = [], action)=> {
         switch(action.type){
-          case 'SET_THINGS':
+          case SET_THINGS:
             state = action.things;
             break;
-          case 'CREATE_THING':
+          case CREATE_THING:
             state = [...state, action.thing];
             break;
-          case 'DESTROY_THING':
+          case DESTROY_THING:
             state = state.filter( thing => action.thing.id !== thing.id);
         }
         return state;
-      });
+      }, Redux.applyMiddleware(ReduxThunk.default));
 
-      const start = async()=> {
-        const response = await axios.get('/api/things');
-        store.dispatch({ type: 'SET_THINGS', things: response.data });
+      const _setThings = (things)=> {
+        return {
+          type: SET_THINGS,
+          things
+        };
       };
 
-      start();
+      const _createThing = (thing)=> {
+        return {
+          type: CREATE_THING,
+          thing
+        };
+      };
+
+      const _deleteThing = (thing)=> {
+        return {
+          type: DESTROY_THING,
+          thing
+        };
+      };
+
+      const deleteThing = (thing)=> {
+        return async (dispatch) => {
+          await axios.delete(`/api/things/${thing.id}`);
+          dispatch(_deleteThing(thing));
+        };
+      }
+
+      const createThing = ()=> {
+        return async (dispatch) => {
+          const response = await axios.post(`/api/things/`, { name: Math.random()});
+          dispatch(_createThing(response.data));
+        };
+      }
+
+      const setThings = ()=> {
+        return async (dispatch) => {
+          const response = await axios.get(`/api/things/`);
+          dispatch(_setThings(response.data));
+        };
+      }
 
       const _Nav = ({ location, things})=> {
           const { pathname } = location;
@@ -70,12 +110,8 @@
         };
       }, (dispatch)=> {
         return {
-          destroy : async(thing)=> {
-            await axios.delete(`/api/things/${thing.id}`);
-            dispatch({
-              type: 'DESTROY_THING',
-              thing
-            });
+          destroy : (thing)=> {
+            dispatch(deleteThing(thing));
           }
         };
 
@@ -106,21 +142,38 @@
         };
       }, (dispatch)=> {
         return {
-          createThing: async()=> {
-            const response = await axios.post('/api/things');
-            dispatch({ type: 'CREATE_THING', thing: response.data });
+          createThing:()=> {
+            return dispatch(createThing());
           }
         }
       })(_Home);
 
-      const App = ()=> {
-        return (
-          <Provider store={ store }>
+
+      class _Routes extends React.Component{
+        componentDidMount(){
+          this.props.load();
+        }
+        render(){
+          return (
             <HashRouter>
               <Route component={ Nav } />
               <Route path='/' exact component={ Home } />
               <Route path='/things' component={ Things } />
             </HashRouter>
+          );
+        }
+      }
+
+      const Routes = connect(null, (dispatch)=> {
+        return {
+          load: ()=> dispatch(setThings())
+        };
+      })(_Routes);
+
+      const App = ()=> {
+        return (
+          <Provider store={ store }>
+            <Routes />
           </Provider>
         );
       };
